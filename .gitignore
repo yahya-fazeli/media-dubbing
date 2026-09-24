@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Node / youtube-dub ---
+node_modules/
+.studio-data/
+tmp-*.mjs
+*.log

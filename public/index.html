@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>youtube-dub Studio</title>
+  <link rel="stylesheet" href="/css/studio.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <h1>youtube-dub <span class="version">Studio</span></h1>
+    </div>
+    <div class="topbar-actions">
+      <span id="env-badges" class="badges"></span>
+      <button id="refresh-btn" class="btn btn-ghost" type="button" title="Refresh">Refresh</button>
+      <button id="new-job-btn" class="btn btn-primary" type="button">New job</button>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <main class="layout">
+    <aside class="panel panel-jobs">
+      <div class="panel-head">
+        <h2>Jobs</h2>
+        <input id="job-filter" class="input input-sm" type="search" placeholder="Filter by id, language…" aria-label="Filter jobs">
+      </div>
+      <div class="panel-head panel-head-sub">
+        <select id="status-filter" class="input input-sm" aria-label="Filter by status">
+          <option value="">All statuses</option>
+          <option value="created">Created</option>
+          <option value="running">Running</option>
+          <option value="cancelling">Cancelling</option>
+          <option value="cancelled">Cancelled</option>
+          <option value="failed">Failed</option>
+          <option value="completed">Completed</option>
+        </select>
+      </div>
+      <ul id="job-list" class="job-list" role="list"></ul>
+      <p id="job-list-empty" class="empty" hidden>No jobs yet.</p>
+    </aside>
+
+    <section class="panel panel-detail">
+      <div id="detail-empty" class="empty-state">
+        <h2>Select a job</h2>
+        <p>Choose a job on the left, or create a new one to start dubbing.</p>
+      </div>
+
+      <div id="detail" hidden>
+        <div class="detail-head">
+          <div>
+            <h2 id="detail-title">Job</h2>
+            <p id="detail-sub" class="muted"></p>
+          </div>
+          <div id="detail-controls" class="controls"></div>
+        </div>
+
+        <div class="status-row">
+          <span id="detail-status" class="pill"></span>
+          <span id="detail-progress" class="muted"></span>
+        </div>
+
+        <div id="detail-summary" class="summary-grid"></div>
+
+        <nav class="tabs" id="tabs" role="tablist">
+          <button class="tab is-active" data-tab="pipeline" role="tab">Pipeline</button>
+          <button class="tab" data-tab="segments" role="tab">Segments</button>
+          <button class="tab" data-tab="transcript" role="tab">Transcript</button>
+          <button class="tab" data-tab="timing" role="tab">Timing</button>
+          <button class="tab" data-tab="audio" role="tab">Audio</button>
+          <button class="tab" data-tab="quality" role="tab">Quality</button>
+          <button class="tab" data-tab="failures" role="tab">Failures</button>
+          <button class="tab" data-tab="output" role="tab">Output</button>
+          <button class="tab" data-tab="logs" role="tab">Logs</button>
+        </nav>
+
+        <div class="tab-panels">
+          <div class="tab-panel is-active" data-panel="pipeline">
+            <ol id="pipeline-list" class="pipeline"></ol>
+          </div>
+
+          <div class="tab-panel" data-panel="segments">
+            <div class="toolbar">
+              <label class="field-inline">
+                Status
+                <select id="segment-status" class="input input-sm">
+                  <option value="">All</option>
+                  <option value="pending">Pending</option>
+                  <option value="translated">Translated</option>
+                  <option value="synthesized">Synthesized</option>
+                  <option value="fitted">Fitted</option>
+                  <option value="mixed">Mixed</option>
+                  <option value="failed">Failed</option>
+                  <option value="skipped">Skipped</option>
+                </select>
+              </label>
+              <label class="field-inline">
+                Search
+                <input id="segment-search" class="input input-sm" type="search" placeholder="Text contains…">
+              </label>
+              <span id="segment-count" class="muted"></span>
+              <button id="retry-failed-segments" class="btn btn-ghost" type="button">Retry failed</button>
+            </div>
+            <div class="segment-list-head">
+              <span>ID</span><span>Window</span><span>Status</span><span>Fit</span><span>Text</span><span></span>
+            </div>
+            <ul id="segment-list" class="segment-list" role="list"></ul>
+            <div class="pager">
+              <button id="seg-prev" class="btn btn-ghost" type="button">Previous</button>
+              <span id="seg-page" class="muted"></span>
+              <button id="seg-next" class="btn btn-ghost" type="button">Next</button>
+            </div>
+          </div>
+
+          <div class="tab-panel" data-panel="transcript">
+            <div id="transcript-meta" class="muted"></div>
+            <div id="transcript-body" class="transcript"></div>
+          </div>
+
+          <div class="tab-panel" data-panel="timing">
+            <div id="timing-chart" class="timing-chart"></div>
+            <div id="timing-table" class="timing-table"></div>
+          </div>
+
+          <div class="tab-panel" data-panel="audio">
+            <div class="audio-grid">
+              <div>
+                <h3>Dialogue timeline</h3>
+                <canvas id="waveform" class="waveform" width="900" height="160"></canvas>
+                <p id="waveform-note" class="muted"></p>
+              </div>
+              <div>
+                <h3>Segment audio</h3>
+                <div id="audio-segment" class="muted">Select a segment to inspect its audio.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-panel" data-panel="quality">
+            <div id="quality-summary" class="quality-summary"></div>
+            <ul id="quality-checks" class="checks"></ul>
+            <h3>Segment grades</h3>
+            <div id="quality-grades" class="grades"></div>
+          </div>
+
+          <div class="tab-panel" data-panel="failures">
+            <div class="toolbar">
+              <button id="retry-job-btn" class="btn btn-ghost" type="button">Retry job</button>
+              <span class="muted">Recovery scope: job → stage → segment</span>
+            </div>
+            <ul id="failure-list" class="failures"></ul>
+            <h3>Stage errors</h3>
+            <div id="stage-errors" class="stage-errors"></div>
+          </div>
+
+          <div class="tab-panel" data-panel="output">
+            <div id="output-body"></div>
+          </div>
+
+          <div class="tab-panel" data-panel="logs">
+            <pre id="log-view" class="log-view"></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="new-job-dialog" class="dialog">
+    <form id="new-job-form" method="dialog">
+      <h2>New dubbing job</h2>
+      <label class="field">
+        <span>Source media</span>
+        <input id="nj-file" name="file" type="file" required>
+        <small id="nj-file-help" class="muted"></small>
+      </label>
+      <div class="field-row">
+        <label class="field">
+          <span>Source language</span>
+          <select id="nj-source" name="sourceLanguage" class="input"></select>
+        </label>
+        <label class="field">
+          <span>Target language</span>
+          <select id="nj-target" name="targetLanguage" class="input"></select>
+        </label>
+      </div>
+      <label class="field">
+        <span>Voices (comma separated, optional)</span>
+        <input id="nj-voices" name="voices" class="input" placeholder="Kore,Puck">
+      </label>
+      <div class="field-row">
+        <label class="field checkbox">
+          <input id="nj-separate" name="separateVocals" type="checkbox">
+          <span>Separate vocals from background</span>
+        </label>
+        <label class="field checkbox">
+          <input id="nj-reencode" name="reencodeVideo" type="checkbox">
+          <span>Re-encode video</span>
+        </label>
+      </div>
+      <label class="field checkbox">
+        <input id="nj-autostart" name="autoStart" type="checkbox" checked>
+        <span>Start immediately</span>
+      </label>
+      <div id="nj-error" class="form-error" hidden></div>
+      <div class="dialog-actions">
+        <button type="button" id="nj-cancel" class="btn btn-ghost">Cancel</button>
+        <button type="submit" id="nj-submit" class="btn btn-primary">Create job</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
