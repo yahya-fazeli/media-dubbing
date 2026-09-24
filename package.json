@@ -1,0 +1,43 @@
+{
+  "name": "youtube-dub",
+  "version": "3.0.0",
+  "description": "Node.js web platform for dubbing videos into a target language",
+  "type": "module",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "bin": {
+    "youtube-dub": "./bin/youtube-dub.js"
+  },
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./config": "./src/config.js"
+  },
+  "scripts": {
+    "start": "node bin/youtube-dub.js serve",
+    "dev": "node --watch bin/youtube-dub.js serve",
+    "cli": "node bin/youtube-dub.js",
+    "demo": "node scripts/demo.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "test:unit": "node --test \"test/unit/*.test.js\"",
+    "test:integration": "node --test \"test/integration/*.test.js\""
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "multer": "^2.4.0"
+  },
+  "optionalDependencies": {
+    "@opentelemetry/api": "^1.9.0"
+  },
+  "keywords": [
+    "dubbing",
+    "video",
+    "translation",
+    "tts",
+    "ffmpeg",
+    "node"
+  ],
+  "license": "MIT",
+  "private": true
+}
