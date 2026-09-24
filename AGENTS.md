@@ -15,6 +15,25 @@ mixing → rendering.
 - `node bin/youtube-dub.js serve` — start the Studio server.
 - `node bin/youtube-dub.js run <file>` — CLI pipeline run.
 
+## Test layout
+
+Unit tests (`test/unit/`) cover the pure and near-pure modules directly:
+concurrency, cancellation, ids/fsutil, errors, job-model, wav, alignment,
+providers/retry/key-pool/fake-provider, context, artifact-store, job-store,
+ingest, logger, metrics, middleware, config, telemetry, provider/media
+selection, and the CLI parsers/formatters. Integration tests
+(`test/integration/`) drive the real pipeline and HTTP API end to end against
+the mock engine and fake provider.
+
+Helpers live in `test/helpers/fixtures.js`: `makeTestApp()` builds a full
+application in a throwaway data dir, and `createFixtureJob()` seeds a job from a
+deterministic sine-wave WAV. Prefer these over hand-rolled setup.
+
+Node's test runner runs files in parallel processes; tests that touch
+`process.env` or shared temp dirs must restore state (see `withEnv` in
+`test/unit/config.test.js` and the `boot()`/`t.after()` pattern in
+`test/unit/middleware.test.js`).
+
 ## Environment
 
 The sandbox has **no ffmpeg, no Gemini key, and no Demucs**. Defaults are
