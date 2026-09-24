@@ -34,6 +34,13 @@ export function classifyError(err) {
   if (err?.name === 'TimeoutError' || err?.code === ErrorCode.TIMEOUT) return FailureClass.TRANSIENT;
   if (err?.code === ErrorCode.PROVIDER_QUOTA) return FailureClass.QUOTA;
   if (err?.code === ErrorCode.PROVIDER_AUTH) return FailureClass.AUTH;
+  // A provider error carries the HTTP status that produced it. Reuse the status
+  // mapping so a 503 is retried as transient rather than dismissed as permanent
+  // just because the surfaced code is the generic PROVIDER_ERROR.
+  const status = err?.details?.status;
+  if (typeof status === 'number') {
+    return classifyHttpStatus(status, err?.details?.body ?? '');
+  }
   const causeCode = err?.cause?.code ?? err?.code;
   if (['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EAI_AGAIN', 'ENOTFOUND', 'UND_ERR_CONNECT_TIMEOUT'].includes(causeCode)) {
     return FailureClass.TRANSIENT;
