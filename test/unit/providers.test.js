@@ -5,7 +5,7 @@ import {
   FailureClass, classifyHttpStatus, classifyError, backoffDelay, withRetries,
 } from '../../src/providers/retry.js';
 import { FakeProvider } from '../../src/providers/fake-provider.js';
-import { CancelledError, ProviderError } from '../../src/core/errors.js';
+import { CancelledError, ProviderError, ErrorCode } from '../../src/core/errors.js';
 import { CancelToken } from '../../src/core/cancellation.js';
 
 test('KeyPool de-duplicates keys and reports size', () => {
@@ -101,6 +101,20 @@ test('classifyError recognizes cancellation and transient network faults', () =>
   econn.code = 'ECONNRESET';
   assert.equal(classifyError(econn), FailureClass.TRANSIENT);
   assert.equal(classifyError(new Error('nope')), FailureClass.PERMANENT);
+});
+
+test('classifyError honors the HTTP status recorded on a provider error', () => {
+  // A generic PROVIDER_ERROR must not hide the status that produced it: a 503 is
+  // transient and worth retrying, while a 400 is not.
+  const unavailable = new ProviderError('Gemini returned 503', {
+    code: ErrorCode.PROVIDER_ERROR, retryable: true, details: { status: 503 },
+  });
+  assert.equal(classifyError(unavailable), FailureClass.TRANSIENT);
+
+  const malformed = new ProviderError('Gemini rejected the request', {
+    code: ErrorCode.PROVIDER_ERROR, retryable: false, details: { status: 400 },
+  });
+  assert.equal(classifyError(malformed), FailureClass.INVALID);
 });
 
 test('backoffDelay grows exponentially and stays within bounds', () => {

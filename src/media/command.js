@@ -74,11 +74,15 @@ export async function runCommand(command, args, options = {}) {
       killTree(child, 'SIGKILL');
     }, timeoutMs);
 
+    // Output is capped by slicing, not just by skipping whole chunks: a single
+    // large chunk would otherwise blow past the limit on its own.
     child.stdout?.on('data', (chunk) => {
-      if (stdout.length < maxOutputChars) stdout += chunk.toString();
+      if (stdout.length >= maxOutputChars) return;
+      stdout += chunk.toString().slice(0, maxOutputChars - stdout.length);
     });
     child.stderr?.on('data', (chunk) => {
-      if (stderr.length < maxOutputChars) stderr += chunk.toString();
+      if (stderr.length >= maxOutputChars) return;
+      stderr += chunk.toString().slice(0, maxOutputChars - stderr.length);
     });
 
     child.on('error', (err) => {
@@ -178,7 +182,8 @@ export async function probeTool(command, args = ['-version']) {
 }
 
 function firstLine(text) {
-  return String(text ?? '').split('\n')[0]?.trim() ?? null;
+  const line = String(text ?? '').split('\n')[0]?.trim();
+  return line ? line : null;
 }
 
 export { isCancellation };
