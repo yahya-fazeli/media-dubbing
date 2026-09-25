@@ -212,6 +212,15 @@ export class JobOrchestrator {
       record.status = JobStatus.RUNNING;
       record.startedAt = record.startedAt ?? new Date().toISOString();
       record.finishedAt = null;
+      // A resumed process can have a different provider configuration (for
+      // example, the key may have been removed and the deterministic offline
+      // provider selected). Record the provider actually used by this run rather
+      // than leaving the creation-time value stale in job status.
+      record.providerInfo = {
+        provider: this.providerName,
+        engine: this.engineName,
+        configuredAt: new Date().toISOString(),
+      };
       if (startStage) {
         // Stages from the resume point onward are reopened so their state
         // reflects that they are about to run again.
@@ -228,7 +237,12 @@ export class JobOrchestrator {
 
     const log = this.#logger.child({ jobId, requestId });
     const startedAt = Date.now();
-    log.info('Job run started', { resume: Boolean(startStage), from: startStage ?? PIPELINE_ORDER[0] });
+    log.info('Job run started', {
+      resume: Boolean(startStage),
+      from: startStage ?? PIPELINE_ORDER[0],
+      provider: this.providerName,
+      engine: this.engineName,
+    });
 
     const freshJob = await this.#store.read(jobId, { fresh: true });
     const context = new PipelineContext({

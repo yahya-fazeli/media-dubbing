@@ -43,6 +43,24 @@ test('a full job runs every pipeline stage and completes', async (t) => {
   assert.ok(done.segments.length > 1, 'a 20s source should produce multiple segments');
 });
 
+test('job status records the provider active on each run', async (t) => {
+  const { app, dataDir } = await makeTestApp();
+  t.after(async () => { await app.close(); await cleanupDir(dataDir); });
+
+  const job = await createFixtureJob(app);
+  const first = await runJob(app, job.jobId);
+  assert.equal(first.providerInfo.provider, 'fake');
+
+  // Model a later process/resume with a different provider selection.
+  app.provider.name = 'gemini';
+  await app.orchestrator.startJob(job.jobId, { resume: true });
+  await app.orchestrator.waitFor(job.jobId, { timeoutMs: 120_000 });
+  const resumed = await app.orchestrator.getJob(job.jobId);
+
+  assert.equal(resumed.status, JobStatus.COMPLETED);
+  assert.equal(resumed.providerInfo.provider, 'gemini');
+});
+
 test('the pipeline passes inline audio to Gemini using the positional contract', async (t) => {
   const { app, dataDir } = await makeTestApp();
   t.after(async () => { await app.close(); await cleanupDir(dataDir); });
