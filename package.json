@@ -45,5 +45,8 @@
     "node"
   ],
   "license": "MIT",
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
 }

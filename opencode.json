@@ -1,0 +1,68 @@
+{
+  "mcp": {
+    "servers": {
+      "git": {
+        "type": "local",
+        "command": [
+          "git-mcp-server"
+        ]
+      },
+      "context7": {
+        "type": "local",
+        "command": [
+          "context7-mcp"
+        ]
+      },
+      "repomix": {
+        "type": "local",
+        "command": [
+          "repomix",
+          "--mcp"
+        ]
+      },
+      "claude": {
+        "type": "local",
+        "command": [
+          "claude",
+          "mcp",
+          "serve"
+        ]
+      },
+      "playwright": {
+        "type": "local",
+        "command": [
+          "playwright-mcp"
+        ]
+      },
+      "memory": {
+        "type": "local",
+        "command": [
+          "mcp-server-memory"
+        ]
+      },
+      "filesystem": {
+        "type": "local",
+        "command": [
+          "mcp-server-filesystem",
+          "."
+        ]
+      },
+      "chrome-devtools": {
+        "type": "local",
+        "command": [
+          "chrome-devtools-mcp"
+        ]
+      },
+      "sequential-thinking": {
+        "type": "local",
+        "command": [
+          "mcp-server-sequential-thinking"
+        ]
+      },
+      "microsoft-learn": {
+        "type": "remote",
+        "url": "https://learn.microsoft.com/api/mcp"
+      }
+    }
+  }
+}
