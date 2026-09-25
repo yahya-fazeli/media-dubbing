@@ -10,14 +10,29 @@ export class CancelToken {
   #reason = null;
   #listeners = new Set();
   #controllers = new Set();
+  // Backing AbortController. The token is handed to subprocess runners, fetch
+  // callers, and sleep() as their `signal`, all of which expect the standard
+  // AbortSignal interface (addEventListener/aborted/reason). Going through a real
+  // controller keeps that contract while the cooperative token keeps its own
+  // richer API on top.
+  #controller = new AbortController();
 
   get cancelled() { return this.#cancelled; }
+  get aborted() { return this.#controller.signal.aborted; }
   get reason() { return this.#reason; }
+  /** The underlying AbortSignal, for callers that want one directly. */
+  get signal() { return this.#controller.signal; }
 
   cancel(reason = 'Cancelled by user') {
     if (this.#cancelled) return;
     this.#cancelled = true;
     this.#reason = reason;
+    // Abort with an Error reason so consumers that branch on `reason` (sleep,
+    // fetch wrappers) surface something `isCancellation` recognises instead of a
+    // bare string.
+    try {
+      this.#controller.abort(reason instanceof Error ? reason : new CancelledError(reason));
+    } catch { /* already aborted */ }
     for (const controller of this.#controllers) {
       try { controller.abort(reason); } catch { /* already aborted */ }
     }
@@ -26,6 +41,14 @@ export class CancelToken {
       try { listener(reason); } catch { /* listener errors must not break cancel */ }
     }
     this.#listeners.clear();
+  }
+
+  addEventListener(type, listener, options) {
+    this.#controller.signal.addEventListener(type, listener, options);
+  }
+
+  removeEventListener(type, listener, options) {
+    this.#controller.signal.removeEventListener(type, listener, options);
   }
 
   throwIfCancelled() {

@@ -21,7 +21,10 @@
     "demo": "node scripts/demo.js",
     "test": "node --test \"test/**/*.test.js\"",
     "test:unit": "node --test \"test/unit/*.test.js\"",
-    "test:integration": "node --test \"test/integration/*.test.js\""
+    "test:integration": "node --test \"test/integration/*.test.js\"",
+    "test:real:media": "RUN_REAL_MEDIA_TESTS=1 node --test \"test/real/media-smoke.test.js\"",
+    "test:real:provider": "RUN_REAL_PROVIDER_TESTS=1 node --test \"test/real/provider-smoke.test.js\"",
+    "test:load": "RUN_LOAD_TESTS=1 node --test \"test/real/load.test.js\""
   },
   "dependencies": {
     "express": "^4.21.2",

@@ -94,6 +94,46 @@ test('isCancellation recognizes cancellation errors and raw AbortErrors', () => 
   assert.equal(isCancellation(new Error('plain')), false);
 });
 
+test('CancelToken exposes the AbortSignal interface its consumers require', () => {
+  // The orchestrator hands a CancelToken to runCommand, sleep(), and the Gemini
+  // client as their `signal`. Those callers use the standard AbortSignal surface
+  // (addEventListener/removeEventListener/aborted/reason), so the token must
+  // provide it or the real subprocess path throws "addEventListener is not a
+  // function" -- which is exactly what happened before this contract was pinned.
+  const token = new CancelToken();
+
+  assert.equal(typeof token.addEventListener, 'function');
+  assert.equal(typeof token.removeEventListener, 'function');
+  assert.equal(token.aborted, false);
+  assert.equal(token.reason, null);
+  assert.ok(token.signal instanceof AbortSignal, 'exposes a real AbortSignal');
+
+  let fired = 0;
+  const onAbort = () => { fired += 1; };
+  token.addEventListener('abort', onAbort, { once: true });
+  token.cancel('stop now');
+
+  assert.equal(fired, 1, 'abort listeners fire on cancel');
+  assert.equal(token.aborted, true);
+  assert.equal(token.reason, 'stop now');
+  assert.ok(token.signal.aborted);
+
+  // A listener removed before cancel must not fire.
+  const other = new CancelToken();
+  let hit = 0;
+  const handler = () => { hit += 1; };
+  other.addEventListener('abort', handler);
+  other.removeEventListener('abort', handler);
+  other.cancel();
+  assert.equal(hit, 0);
+});
+
+test('CancelToken abort reason is an error isCancellation recognizes', () => {
+  const token = new CancelToken();
+  token.cancel('user asked');
+  assert.equal(isCancellation(token.signal.reason), true);
+});
+
 test('contentHash is deterministic and sensitive to input order', () => {
   assert.equal(contentHash('a', 'b'), contentHash('a', 'b'));
   assert.notEqual(contentHash('a', 'b'), contentHash('b', 'a'));

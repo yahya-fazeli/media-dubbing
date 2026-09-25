@@ -4,6 +4,7 @@ import { GeminiClient } from '../../src/providers/gemini-client.js';
 import { loadConfig } from '../../src/config.js';
 import { MetricsRegistry } from '../../src/core/metrics.js';
 import { ErrorCode } from '../../src/core/errors.js';
+import { CancelToken } from '../../src/core/cancellation.js';
 
 const silentLogger = { debug() {}, info() {}, warn() {}, error() {} };
 
@@ -270,6 +271,55 @@ test('an already-aborted signal short-circuits before any fetch', async () => {
   await assert.rejects(
     () => client.generateContent({
       models: ['m'], buildBody: BUILD, operation: 'transcribe', signal: controller.signal,
+    }),
+    (err) => err.code === ErrorCode.CANCELLED,
+  );
+  assert.equal(fetchImpl.calls.length, 0);
+});
+
+test('a CancelToken cancels an in-flight request', async () => {
+  // The orchestrator passes a CancelToken, not an AbortSignal. The client used
+  // `signal?.addEventListener?.(...)`, which silently no-ops on a token lacking
+  // that method -- so provider calls kept running after a cancel. This pins the
+  // token shape the client actually needs.
+  //
+  // The request timeout is deliberately long and the whole thing races a short
+  // deadline: without the abort wiring the request would simply hang until that
+  // long timeout, so asserting "rejects with CANCELLED" alone would pass for the
+  // wrong reason after 60s.
+  const fetchImpl = (url, init) => new Promise((resolve, reject) => {
+    init.signal.addEventListener('abort', () => reject(new Error('aborted')));
+  });
+  const { client } = makeClient({ fetchImpl, requestTimeoutMs: 60_000, maxAttempts: 3 });
+  const token = new CancelToken();
+
+  const promise = client.generateContent({
+    models: ['m'], buildBody: BUILD, operation: 'transcribe', signal: token,
+  });
+  setTimeout(() => token.cancel('user cancelled'), 40);
+
+  const deadline = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('cancel did not propagate within 2s')), 2000);
+  });
+
+  await assert.rejects(
+    Promise.race([promise, deadline]),
+    (err) => {
+      assert.equal(err.code, ErrorCode.CANCELLED, `expected CANCELLED, got ${err.code}: ${err.message}`);
+      return true;
+    },
+  );
+});
+
+test('an already-cancelled CancelToken short-circuits before any fetch', async () => {
+  const fetchImpl = stubFetch([() => okResponse({})]);
+  const { client } = makeClient({ fetchImpl });
+  const token = new CancelToken();
+  token.cancel();
+
+  await assert.rejects(
+    () => client.generateContent({
+      models: ['m'], buildBody: BUILD, operation: 'transcribe', signal: token,
     }),
     (err) => err.code === ErrorCode.CANCELLED,
   );
