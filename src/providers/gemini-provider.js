@@ -1,4 +1,3 @@
-import path from 'node:path';
 import { GeminiClient } from './gemini-client.js';
 import { ProviderError, ErrorCode, ValidationError } from '../core/errors.js';
 import { assertLanguage, assertNonEmpty } from './provider.js';
@@ -162,21 +161,26 @@ export class GeminiProvider {
       });
     }
     const limit = Number(durationSeconds ?? Number.POSITIVE_INFINITY) + 5;
-    const words = parsed.words
+    const candidates = parsed.words
       .map((w) => ({
         text: String(w.text ?? '').trim(),
         start: clampTime(Number(w.start), 0, limit),
         end: clampTime(Number(w.end), 0, limit),
         confidence: typeof w.confidence === 'number' ? w.confidence : null,
       }))
-      // Repair any non-monotonic timestamps the model produced.
-      .filter((w) => w.text.length > 0)
-      .map((w, i, arr) => {
-        const prevEnd = i > 0 ? arr[i - 1].end : 0;
-        const start = Math.max(prevEnd, Number.isFinite(w.start) ? w.start : prevEnd);
-        const end = Math.max(start + 0.01, Number.isFinite(w.end) ? w.end : start + 0.2);
-        return { ...w, start, end };
-      });
+      .filter((w) => w.text.length > 0);
+
+    // Repair non-monotonic timestamps. This must fold sequentially: each word is
+    // pushed past the *repaired* end of the previous one, not the original end,
+    // otherwise overlapping words survive the repair.
+    const words = [];
+    let prevEnd = 0;
+    for (const w of candidates) {
+      const start = Math.max(prevEnd, Number.isFinite(w.start) ? w.start : prevEnd);
+      const end = Math.max(start + 0.01, Number.isFinite(w.end) ? w.end : start + 0.2);
+      words.push({ ...w, start, end });
+      prevEnd = end;
+    }
 
     if (!words.length) {
       throw new ProviderError('Transcription produced no words', {
@@ -334,5 +338,3 @@ function truncate(text, max) {
   const value = String(text ?? '');
   return value.length > max ? `${value.slice(0, max)}...` : value;
 }
-
-export { path };
