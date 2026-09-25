@@ -290,3 +290,57 @@ test('source buffers are validated for size and cached sources are copied in', a
   const onDisk = await fsp.readFile(staged);
   assert.deepEqual(onDisk, bytes, 'the source is copied byte-for-byte');
 });
+
+test('loudness normalization is optional and off by default', async (t) => {
+  const { app, dataDir } = await makeTestApp();
+  t.after(async () => { await app.close(); await cleanupDir(dataDir); });
+
+  const job = await createFixtureJob(app);
+  const done = await runJob(app, job.jobId);
+
+  assert.equal(done.stages[StageName.MIXING].metadata.normalized, null);
+  assert.equal(done.artifacts.dubbedAudio, 'audio/dubbed.wav');
+});
+
+test('a job can opt into loudness normalization of the final mix', async (t) => {
+  const { app, dataDir } = await makeTestApp();
+  t.after(async () => { await app.close(); await cleanupDir(dataDir); });
+
+  const job = await createFixtureJob(app, { job: { settings: { normalizeLoudness: true } } });
+  const done = await runJob(app, job.jobId);
+
+  assert.equal(done.status, JobStatus.COMPLETED);
+  const meta = done.stages[StageName.MIXING].metadata;
+  assert.ok(meta.normalized, 'normalization should be recorded');
+  assert.equal(meta.normalized.relative, 'audio/dubbed-normalized.wav');
+  assert.equal(done.artifacts.dubbedAudio, 'audio/dubbed-normalized.wav');
+
+  // The normalized artifact must exist, be valid PCM, and keep the duration.
+  const resolved = await app.orchestrator.resolveArtifact(job.jobId, done.artifacts.dubbedAudio);
+  const decoded = decodeWav(await fsp.readFile(resolved.path));
+  assert.equal(decoded.channels, 2);
+  assert.ok(Math.abs(decoded.durationSeconds - meta.durationSeconds) < 0.5, 'normalization must not shift duration');
+
+  // The un-normalized mix stays available as the pre-normalization artifact.
+  const raw = await app.orchestrator.resolveArtifact(job.jobId, 'audio/dubbed.wav');
+  assert.ok(raw.sizeBytes > 0);
+});
+
+test('a failing normalization degrades gracefully instead of failing the dub', async (t) => {
+  const { app, dataDir } = await makeTestApp();
+  t.after(async () => { await app.close(); await cleanupDir(dataDir); });
+
+  // Force the engine's normalizeAudio to blow up; the job must still complete.
+  const original = app.engine.normalizeAudio.bind(app.engine);
+  app.engine.normalizeAudio = async () => { throw new Error('normalizer exploded'); };
+  t.after(() => { app.engine.normalizeAudio = original; });
+
+  const job = await createFixtureJob(app, { job: { settings: { normalizeLoudness: true } } });
+  const done = await runJob(app, job.jobId);
+
+  assert.equal(done.status, JobStatus.COMPLETED);
+  assert.equal(done.stages[StageName.MIXING].status, StageStatus.SUCCEEDED);
+  assert.equal(done.stages[StageName.MIXING].metadata.normalized, null);
+  assert.equal(done.artifacts.dubbedAudio, 'audio/dubbed.wav', 'falls back to the validated mix');
+});
+
