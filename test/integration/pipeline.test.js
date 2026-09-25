@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
 import { decodeWav } from '../../src/core/wav.js';
 import { JobStatus, StageName, StageStatus, SegmentStatus } from '../../src/core/job-model.js';
+import { GeminiProvider } from '../../src/providers/gemini-provider.js';
 import { makeTestApp, createFixtureJob, cleanupDir, sineWav } from '../helpers/fixtures.js';
 
 test('waitFor clears its timeout timer once the job settles', async (t) => {
@@ -40,6 +41,69 @@ test('a full job runs every pipeline stage and completes', async (t) => {
   }
   assert.equal(done.quality.overall, 'pass');
   assert.ok(done.segments.length > 1, 'a 20s source should produce multiple segments');
+});
+
+test('the pipeline passes inline audio to Gemini using the positional contract', async (t) => {
+  const { app, dataDir } = await makeTestApp();
+  t.after(async () => { await app.close(); await cleanupDir(dataDir); });
+
+  const geminiSettings = app.config.providers.gemini;
+  geminiSettings.apiKeys = ['test-key'];
+  geminiSettings.maxAttempts = 1;
+
+  const calls = [];
+  const gemini = new GeminiProvider(app.config, {
+    logger: app.logger,
+    async fetchImpl(url, init) {
+      calls.push({ url, init });
+      const body = {
+        candidates: [{ content: { parts: [{ text: JSON.stringify({
+          language: 'en',
+          words: [
+            { text: 'hello', start: 0, end: 0.4 },
+            { text: 'world', start: 0.4, end: 0.8 },
+          ],
+          text: 'hello world',
+        }) }] } }],
+      };
+      return {
+        ok: true,
+        status: 200,
+        async json() { return body; },
+        async text() { return JSON.stringify(body); },
+      };
+    },
+  });
+
+  let audioBase64;
+  let transcriptionOptions;
+  app.provider.transcribe = (input, options) => {
+    audioBase64 = input;
+    transcriptionOptions = options;
+    assert.equal(typeof input, 'string');
+    assert.ok(input.length > 0, 'transcription input must be base64 audio');
+    assert.equal(options.mimeType, 'audio/wav');
+    assert.equal(options.language, 'en');
+    assert.equal(options.stage, StageName.TRANSCRIPTION);
+    assert.equal(options.signal.aborted, false);
+    assert.equal(typeof options.signal.addEventListener, 'function');
+    return gemini.transcribe(input, options);
+  };
+
+  const job = await createFixtureJob(app, { media: { seconds: 2 } });
+  const done = await runJob(app, job.jobId);
+
+  assert.equal(done.status, JobStatus.COMPLETED);
+  assert.equal(done.stages[StageName.TRANSCRIPTION].status, StageStatus.SUCCEEDED);
+  assert.equal(transcriptionOptions.durationSeconds, 2);
+  assert.equal(calls.length, 1, 'Gemini must receive the extracted audio');
+
+  const sent = JSON.parse(calls[0].init.body);
+  const inline = sent.contents[0].parts.find((part) => part.inlineData);
+  assert.equal(inline.inlineData.data, audioBase64);
+  assert.equal(inline.inlineData.mimeType, 'audio/wav');
+  const decoded = decodeWav(Buffer.from(inline.inlineData.data, 'base64'));
+  assert.ok(Math.abs(decoded.durationSeconds - 2) < 0.01);
 });
 
 test('a completed job produces playable artifacts on disk', async (t) => {

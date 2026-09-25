@@ -26,8 +26,8 @@ export class GeminiProvider {
    * base64 because the preview API has a small per-request limit; larger sources
    * are handled by the pipeline transcribing windows and stitching results.
    */
-  async transcribe(input, options = {}) {
-    const { audioBase64, mimeType = 'audio/wav', language, durationSeconds, signal, stage } = options;
+  async transcribe(audioBase64, options = {}) {
+    const { mimeType = 'audio/wav', language, durationSeconds, signal, stage } = options;
     if (!audioBase64) throw new ValidationError('transcribe requires audioBase64');
     assertLanguage(language ?? 'en', 'language');
 

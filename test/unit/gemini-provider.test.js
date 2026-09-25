@@ -60,8 +60,9 @@ test('transcribe sends inline audio and parses word timings', async () => {
     language: 'en', words, text: 'hello world',
   })));
 
-  const result = await provider.transcribe(null, {
-    audioBase64: 'QUJD', mimeType: 'audio/wav', language: 'en', durationSeconds: 1,
+  // The pipeline passes base64 audio as the positional provider input.
+  const result = await provider.transcribe('QUJD', {
+    mimeType: 'audio/wav', language: 'en', durationSeconds: 1,
   });
 
   assert.equal(result.text, 'hello world');
@@ -81,7 +82,7 @@ test('transcribe requires audio and a valid language', async () => {
 
   await assert.rejects(() => provider.transcribe(null, { language: 'en' }), /audioBase64/);
   await assert.rejects(
-    () => provider.transcribe(null, { audioBase64: 'QUJD', language: 'not a language' }),
+    () => provider.transcribe('QUJD', { language: 'not a language' }),
     /Invalid language code/,
   );
 });
@@ -99,7 +100,7 @@ test('transcribe repairs non-monotonic and missing timestamps', async () => {
     ],
   })));
 
-  const result = await provider.transcribe(null, { audioBase64: 'QUJD', language: 'en' });
+  const result = await provider.transcribe('QUJD', { language: 'en' });
 
   assert.equal(result.words.length, 3, 'blank words are dropped');
   for (let i = 1; i < result.words.length; i += 1) {
@@ -117,14 +118,14 @@ test('transcribe clamps timestamps to the known duration', async () => {
     words: [{ text: 'a', start: 0, end: 9999 }],
   })));
 
-  const result = await provider.transcribe(null, { audioBase64: 'QUJD', language: 'en', durationSeconds: 2 });
+  const result = await provider.transcribe('QUJD', { language: 'en', durationSeconds: 2 });
   assert.ok(result.words[0].end <= 7, `end was ${result.words[0].end}, expected clamp to duration+5`);
 });
 
 test('transcribe rejects a response that is not the expected shape', async () => {
   const { provider } = makeProvider(textResponse('this is not json'));
   await assert.rejects(
-    () => provider.transcribe(null, { audioBase64: 'QUJD', language: 'en' }),
+    () => provider.transcribe('QUJD', { language: 'en' }),
     (err) => err.code === ErrorCode.PROVIDER_ERROR && err.retryable === true,
   );
 });
@@ -132,7 +133,7 @@ test('transcribe rejects a response that is not the expected shape', async () =>
 test('transcribe rejects a response with no words at all', async () => {
   const { provider } = makeProvider(textResponse(JSON.stringify({ language: 'en', words: [] })));
   await assert.rejects(
-    () => provider.transcribe(null, { audioBase64: 'QUJD', language: 'en' }),
+    () => provider.transcribe('QUJD', { language: 'en' }),
     (err) => err.code === ErrorCode.PROVIDER_ERROR && err.recoveryScope === 'stage',
   );
 });
