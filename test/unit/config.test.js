@@ -142,6 +142,7 @@ test('loadConfig never surfaces credentials inside job-facing directories', asyn
 
 test('SUPPORTED_LANGUAGES are unique and lower-case ISO codes', () => {
   const codes = SUPPORTED_LANGUAGES.map((l) => l.code);
+  assert.ok(codes.includes('fa'), 'Persian should be supported');
   assert.equal(new Set(codes).size, codes.length, 'language codes must be unique');
   for (const lang of SUPPORTED_LANGUAGES) {
     assert.match(lang.code, /^[a-z]{2}$/, `${lang.code} should be a 2-letter code`);

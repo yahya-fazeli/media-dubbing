@@ -1,4 +1,5 @@
 import { ValidationError } from '../core/errors.js';
+import { AUTO_DETECT_LANGUAGE, isLanguageCode } from '../core/languages.js';
 
 /**
  * Provider contract. Three capabilities are needed: transcription, translation,
@@ -26,8 +27,9 @@ export function assertProvider(provider) {
   return provider;
 }
 
-export function assertLanguage(code, label = 'language') {
-  if (!code || typeof code !== 'string' || !/^[a-z]{2}(-[A-Za-z]{2,4})?$/.test(code)) {
+export function assertLanguage(code, label = 'language', { allowAuto = false } = {}) {
+  const valid = isLanguageCode(code) || (allowAuto && code === AUTO_DETECT_LANGUAGE);
+  if (!valid) {
     throw new ValidationError(`Invalid ${label} code: ${JSON.stringify(code)}`);
   }
   return code;

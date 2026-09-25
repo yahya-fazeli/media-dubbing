@@ -3,6 +3,8 @@
  * it can be piped into other tools without ANSI noise.
  */
 
+import { AUTO_DETECT_LANGUAGE } from '../core/languages.js';
+
 const STATUS_WIDTH = 10;
 
 export function formatJobLine(job) {
@@ -14,7 +16,7 @@ export function formatJobLine(job) {
   return [
     job.jobId.padEnd(34),
     pad(job.status, STATUS_WIDTH),
-    `${job.languages.source}->${job.languages.target}`.padEnd(10),
+    `${sourceLanguageLabel(job)}->${job.languages.target}`.padEnd(10),
     progress.padEnd(10),
     duration.padEnd(8),
     created,
@@ -25,7 +27,7 @@ export function formatJobDetail(job) {
   const lines = [];
   lines.push(`Job ${job.jobId}`);
   lines.push(`  status:     ${job.status}`);
-  lines.push(`  languages:  ${job.languages.source} -> ${job.languages.target}`);
+  lines.push(`  languages:  ${sourceLanguageLabel(job)} -> ${job.languages.target}`);
   lines.push(`  source:     ${job.source.originalName} (${round(job.source.durationSeconds ?? 0, 1)}s)`);
   lines.push(`  created:    ${job.createdAt}`);
   lines.push(`  updated:    ${job.updatedAt}`);
@@ -89,6 +91,14 @@ export function formatFailures(job) {
     }
   }
   return lines.join('\n');
+}
+
+function sourceLanguageLabel(job) {
+  const requested = job.languages?.source ?? '-';
+  const detected = job.languages?.detectedSource;
+  return requested === AUTO_DETECT_LANGUAGE && detected
+    ? `${AUTO_DETECT_LANGUAGE} (${detected})`
+    : requested;
 }
 
 function pad(value, width) {

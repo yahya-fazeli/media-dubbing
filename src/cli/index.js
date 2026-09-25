@@ -3,6 +3,7 @@ import { createApplication } from '../app.js';
 import { startServer } from '../server/server.js';
 import { loadConfig, ensureDataDirs, SUPPORTED_LANGUAGES } from '../config.js';
 import { createLogger } from '../core/logger.js';
+import { AUTO_DETECT_LANGUAGE, isLanguageCode } from '../core/languages.js';
 import { ffmpegAvailable } from '../media/ffmpeg-engine.js';
 import { parseArgs, helpText } from './args.js';
 import { formatJobLine, formatJobDetail, formatSegments, formatFailures } from './format.js';
@@ -88,6 +89,14 @@ async function commandCreate(config, flags, positionals, logger) {
     return 2;
   }
   const sourceLanguage = flags.from ?? 'en';
+  if (!isLanguageCode(targetLanguage) || targetLanguage === AUTO_DETECT_LANGUAGE) {
+    process.stderr.write('--to must be a supported BCP-47 language code\n');
+    return 2;
+  }
+  if (!isLanguageCode(sourceLanguage) && sourceLanguage !== AUTO_DETECT_LANGUAGE) {
+    process.stderr.write('--from must be a BCP-47 language code or "auto"\n');
+    return 2;
+  }
 
   const app = await buildApp(config, logger);
   const settings = {

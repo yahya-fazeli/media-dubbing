@@ -1,6 +1,7 @@
 import { encodeWav, toMono } from '../core/wav.js';
 import { ProviderError, ErrorCode, ValidationError } from '../core/errors.js';
 import { assertLanguage, assertNonEmpty } from './provider.js';
+import { AUTO_DETECT_LANGUAGE } from '../core/languages.js';
 
 /**
  * Offline provider used for tests, demos, and air-gapped runs. It produces
@@ -20,6 +21,8 @@ export class FakeProvider {
     /** Map of segmentId -> remaining forced failures, set by tests. */
     this.forcedFailures = new Map();
     this.transcriptOverride = null;
+    /** Concrete language returned when a job requests automatic detection. */
+    this.detectedLanguage = 'en';
   }
 
   /** Forces the next N synthesis calls for a segment to fail. */
@@ -30,10 +33,15 @@ export class FakeProvider {
   async transcribe(input, options = {}) {
     this.calls.transcribe += 1;
     await this.#delay(options.signal);
+    const requestedLanguage = options.language ?? 'en';
+    const autoDetect = requestedLanguage === AUTO_DETECT_LANGUAGE;
+    assertLanguage(requestedLanguage, 'language', { allowAuto: true });
+    const detectedLanguage = autoDetect ? this.detectedLanguage : requestedLanguage;
+    assertLanguage(detectedLanguage, 'detected language');
     const durationSeconds = Number(options.durationSeconds ?? 10);
     if (this.transcriptOverride) {
       return {
-        language: options.language ?? 'en',
+        language: detectedLanguage,
         durationSeconds,
         words: this.transcriptOverride,
         model: 'fake-transcriber',
@@ -41,9 +49,9 @@ export class FakeProvider {
       };
     }
     return {
-      language: options.language ?? 'en',
+      language: detectedLanguage,
       durationSeconds,
-      words: this.#buildWords(durationSeconds, options.language ?? 'en'),
+      words: this.#buildWords(durationSeconds, detectedLanguage),
       model: 'fake-transcriber',
       provider: this.name,
     };

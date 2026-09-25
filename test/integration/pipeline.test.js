@@ -43,6 +43,50 @@ test('a full job runs every pipeline stage and completes', async (t) => {
   assert.ok(done.segments.length > 1, 'a 20s source should produce multiple segments');
 });
 
+test('auto source detection can produce a Persian dubbed video', async (t) => {
+  const { app, dataDir } = await makeTestApp();
+  t.after(async () => { await app.close(); await cleanupDir(dataDir); });
+
+  // The offline provider returns a concrete code for auto-detect jobs, allowing
+  // the complete pipeline to be tested without network credentials.
+  app.provider.detectedLanguage = 'en';
+  const job = await createFixtureJob(app, {
+    media: { seconds: 6 },
+    job: { sourceLanguage: 'auto', targetLanguage: 'fa' },
+  });
+  const done = await runJob(app, job.jobId);
+
+  assert.equal(done.status, JobStatus.COMPLETED);
+  assert.equal(done.languages.source, 'auto');
+  assert.equal(done.languages.detectedSource, 'en');
+  assert.ok(done.artifacts.finalVideo, 'the auto-detected job should render a video');
+
+  const transcript = await app.artifacts.readJson(job.jobId, done.artifacts.transcript);
+  const translations = await app.artifacts.readJson(job.jobId, done.artifacts.translations);
+  assert.equal(transcript.language, 'en');
+  assert.equal(translations.sourceLanguage, 'en');
+  assert.equal(translations.targetLanguage, 'fa');
+  assert.ok(translations.segments.every((segment) => segment.translatedText.startsWith('[fa]')));
+});
+
+test('Persian can be used as the source language', async (t) => {
+  const { app, dataDir } = await makeTestApp();
+  t.after(async () => { await app.close(); await cleanupDir(dataDir); });
+
+  const job = await createFixtureJob(app, {
+    media: { seconds: 4 },
+    job: { sourceLanguage: 'fa', targetLanguage: 'en' },
+  });
+  const done = await runJob(app, job.jobId);
+
+  assert.equal(done.status, JobStatus.COMPLETED);
+  assert.ok(done.artifacts.finalVideo);
+  const transcript = await app.artifacts.readJson(job.jobId, done.artifacts.transcript);
+  const translations = await app.artifacts.readJson(job.jobId, done.artifacts.translations);
+  assert.equal(transcript.language, 'fa');
+  assert.equal(translations.sourceLanguage, 'fa');
+});
+
 test('job status records the provider active on each run', async (t) => {
   const { app, dataDir } = await makeTestApp();
   t.after(async () => { await app.close(); await cleanupDir(dataDir); });

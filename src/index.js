@@ -5,7 +5,7 @@
  */
 export { createApplication, createPipelineServices } from './app.js';
 export { buildServer, startServer } from './server/server.js';
-export { loadConfig, ensureDataDirs, SUPPORTED_LANGUAGES } from './config.js';
+export { loadConfig, ensureDataDirs, AUTO_DETECT_LANGUAGE, SUPPORTED_LANGUAGES } from './config.js';
 export { JobOrchestrator } from './pipeline/orchestrator.js';
 export { JobStore } from './core/job-store.js';
 export { ArtifactStore } from './core/artifact-store.js';

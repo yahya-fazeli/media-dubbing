@@ -86,6 +86,8 @@ test('health and meta are reachable without a token', async (t) => {
   const body = await readJson(meta);
   assert.equal(body.name, 'youtube-dub');
   assert.ok(body.languages.some((l) => l.code === 'en'));
+  assert.ok(body.languages.some((l) => l.code === 'fa'));
+  assert.deepEqual(body.sourceLanguageOptions[0], { code: 'auto', name: 'Auto-detect' });
   assert.equal(body.authRequired, false);
 });
 
@@ -230,6 +232,27 @@ test('source and target language must differ', async (t) => {
   assert.equal((await readJson(res)).error.code, 'VALIDATION');
 });
 
+test('Persian and automatic source languages are accepted by the API', async (t) => {
+  const { base, token } = await boot(t);
+
+  const automatic = await uploadJob(base, token, {
+    fields: { sourceLanguage: 'auto', targetLanguage: 'fa' },
+  });
+  assert.equal(automatic.status, 201);
+  assert.equal((await readJson(automatic)).job.languages.source, 'auto');
+
+  const persianSource = await uploadJob(base, token, {
+    fields: { sourceLanguage: 'fa', targetLanguage: 'en' },
+  });
+  assert.equal(persianSource.status, 201);
+
+  const automaticTarget = await uploadJob(base, token, {
+    fields: { sourceLanguage: 'en', targetLanguage: 'auto' },
+  });
+  assert.equal(automaticTarget.status, 400);
+  assert.equal((await readJson(automaticTarget)).error.code, 'VALIDATION');
+});
+
 test('unknown jobs, unknown routes, and bad ids return structured errors', async (t) => {
   const { base, token } = await boot(t);
 
@@ -305,4 +328,11 @@ test('the Studio static bundle is served at the root', async (t) => {
   assert.match(html, /<html/i, 'index.html is served');
   const assets = await fsp.readdir(new URL('../../public/js', import.meta.url));
   assert.ok(assets.includes('app.js'));
+
+  const css = await (await fetch(`${base}/css/studio.css`)).text();
+  assert.match(css, /\.artifact-video\s*\{[\s\S]*?width:\s*100%/);
+  assert.match(css, /max-height:\s*min\(420px,\s*60vh\)/);
+  assert.match(css, /\.artifact-video\s*\{[\s\S]*?object-fit:\s*contain/);
+  const views = await (await fetch(`${base}/js/views.js`)).text();
+  assert.match(views, /class:\s*'artifact-video'/);
 });

@@ -127,7 +127,7 @@ Commands:
 Common options:
 
 ```text
-  --from <lang>                 Source language (default: en)
+  --from <lang|auto>            Source language (default: en; use auto to detect)
   --to <lang>                   Target language (required for create)
   --voice <a,b>                 Voice names for TTS
   --separate-vocals             Enable vocal separation (requires Demucs)
@@ -324,8 +324,10 @@ Supported input containers are `.mp4`, `.mov`, `.mkv`, `.webm`, `.avi`, `.m4v`,
 | `DUB_FAKE_LATENCY_MS` | `5` | Simulated per-call latency. |
 | `DUB_FAKE_FAILURE_RATE` | `0` | Fraction of calls to fail, for exercising retries. |
 
-Supported languages: `en`, `es`, `fr`, `de`, `it`, `pt`, `hi`, `ja`, `ko`,
-`zh`, `ar`, `ru`, `nl`, `pl`, `tr`, `id`, `vi`, `th`, `sv`, `uk`.
+Supported languages: `en`, `es`, `fr`, `de`, `it`, `pt`, `fa`, `hi`, `ja`, `ko`,
+`zh`, `ar`, `ru`, `nl`, `pl`, `tr`, `id`, `vi`, `th`, `sv`, `uk`. Use
+`--from auto` (or the Studio's **Auto-detect** source option) to detect the
+source language during transcription.
 
 ## Observability
 

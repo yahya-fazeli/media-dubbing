@@ -77,6 +77,42 @@ test('transcribe sends inline audio and parses word timings', async () => {
   assert.equal(sent.generationConfig.temperature, 0);
 });
 
+test('transcribe supports automatic source-language detection', async () => {
+  const { provider, calls } = makeProvider(textResponse(JSON.stringify({
+    language: 'fa',
+    words: [{ text: 'سلام', start: 0, end: 0.5 }],
+    text: 'سلام',
+  })));
+
+  const result = await provider.transcribe('QUJD', { language: 'auto' });
+
+  assert.equal(result.language, 'fa');
+  const sent = JSON.parse(calls[0].init.body);
+  assert.match(sent.contents[0].parts[0].text, /detect the spoken language/i);
+});
+
+test('auto transcription requires a concrete language code', async () => {
+  const { provider } = makeProvider(textResponse(JSON.stringify({
+    words: [{ text: 'hello', start: 0, end: 0.4 }],
+  })));
+
+  await assert.rejects(
+    () => provider.transcribe('QUJD', { language: 'auto' }),
+    (err) => err.code === ErrorCode.PROVIDER_ERROR && err.retryable === true,
+  );
+});
+
+test('explicit transcription keeps the requested source language authoritative', async () => {
+  const { provider } = makeProvider(textResponse(JSON.stringify({
+    language: 'English',
+    words: [{ text: 'hello', start: 0, end: 0.4 }],
+    text: 'hello',
+  })));
+
+  const result = await provider.transcribe('QUJD', { language: 'en' });
+  assert.equal(result.language, 'en');
+});
+
 test('transcribe requires audio and a valid language', async () => {
   const { provider } = makeProvider(textResponse('{}'));
 

@@ -1,4 +1,5 @@
 import { StageName, StageStatus, SegmentStatus, createSegmentRecord } from '../core/job-model.js';
+import { AUTO_DETECT_LANGUAGE, isLanguageCode } from '../core/languages.js';
 import { segmentWords, segmentFingerprint } from './segmentation.js';
 import { PipelineContext, recordSegmentFailure, clearSegmentFailure } from './context.js';
 import { transcriptionInputPath } from './stages-media.js';
@@ -62,6 +63,7 @@ export const transcriptionStage = {
         parts.push({ window, words: result.words ?? [], language: result.language });
         log.debug('Transcription window complete', {
           window: index + 1, of: windows.length, words: result.words?.length ?? 0,
+          language: result.language ?? null,
         });
       }
 
@@ -75,9 +77,13 @@ export const transcriptionStage = {
         });
       }
 
+      const detectedLanguage = selectDetectedLanguage(parts, job.languages.source);
+      job.languages.detectedSource = detectedLanguage;
+      const sourceLanguage = effectiveSourceLanguage(job);
       const relative = ctx.artifacts.relativePath('transcript', 'words.json');
       const transcript = {
-        language: job.languages.source,
+        language: sourceLanguage,
+        requestedLanguage: job.languages.source,
         durationSeconds,
         words,
         text: words.map((w) => w.text).join(' '),
@@ -89,12 +95,13 @@ export const transcriptionStage = {
       job.artifacts.transcript = relative;
       const metadata = {
         wordCount: words.length,
-        language: transcript.language,
+        language: sourceLanguage,
+        detectedLanguage,
         provider: transcript.provider,
         windows: windows.length,
         fingerprint: contentHash(transcript.text, words.length),
       };
-      log.info('Transcription complete', { words: words.length });
+      log.info('Transcription complete', { words: words.length, language: sourceLanguage });
       return { artifact: relative, metadata };
     });
   },
@@ -187,6 +194,7 @@ export const translationStage = {
       const job = ctx.job;
       const batchSize = ctx.config.pipeline.translationBatchSize;
       const tone = job.settings.translationTone ?? 'neutral';
+      const sourceLanguage = effectiveSourceLanguage(job);
 
       const pending = job.segments.filter((segment) => {
         const stage = segment.stages.translation;
@@ -210,7 +218,7 @@ export const translationStage = {
           const results = await ctx.provider.translate(
             batch.map((s) => ({ segmentId: s.segmentId, text: s.sourceText, context: tone })),
             {
-              sourceLanguage: job.languages.source,
+              sourceLanguage,
               targetLanguage: job.languages.target,
               signal: ctx.signal,
               stage: StageName.TRANSLATION,
@@ -246,7 +254,7 @@ export const translationStage = {
               const [result] = await ctx.provider.translate(
                 [{ segmentId: segment.segmentId, text: segment.sourceText, context: tone }],
                 {
-                  sourceLanguage: job.languages.source,
+                  sourceLanguage,
                   targetLanguage: job.languages.target,
                   signal: ctx.signal,
                   stage: StageName.TRANSLATION,
@@ -279,7 +287,7 @@ export const translationStage = {
 
       const failed = job.segments.filter((s) => s.status === SegmentStatus.FAILED).length;
       await ctx.artifacts.writeJson(ctx.jobId, ctx.artifacts.relativePath('transcript', 'translations.json'), {
-        sourceLanguage: job.languages.source,
+        sourceLanguage,
         targetLanguage: job.languages.target,
         segments: job.segments.map((s) => ({
           segmentId: s.segmentId, start: s.start, end: s.end,
@@ -304,6 +312,7 @@ export const translationStage = {
 function translationFingerprint(ctx, segment) {
   return contentHash(
     segment.sourceText,
+    effectiveSourceLanguage(ctx.job),
     ctx.job.languages.target,
     ctx.job.settings.translationTone ?? 'neutral',
   );
@@ -327,6 +336,52 @@ function resetDownstream(segment) {
     quality: null,
     error: null,
   };
+}
+
+function effectiveSourceLanguage(job) {
+  if (job.languages.source !== AUTO_DETECT_LANGUAGE) return job.languages.source;
+  const detected = job.languages.detectedSource;
+  if (!isLanguageCode(detected)) {
+    throw new ValidationError('Automatic source-language detection has not completed', {
+      retryable: true,
+      recoveryScope: 'stage',
+      recommendedAction: 'Re-run transcription so the provider can detect the source language.',
+    });
+  }
+  return detected;
+}
+
+function selectDetectedLanguage(parts, requestedLanguage) {
+  // Explicit source choices are authoritative; provider-reported labels are
+  // still recorded separately by the transcription provider, but must not make
+  // a manually selected job ambiguous.
+  if (requestedLanguage !== AUTO_DETECT_LANGUAGE) return requestedLanguage;
+
+  const candidates = parts
+    .map((part) => String(part.language ?? '').trim())
+    .filter((language) => isLanguageCode(language));
+  if (!candidates.length) {
+    throw new ProviderError('Transcription did not report a detectable source language', {
+      code: ErrorCode.PROVIDER_ERROR,
+      retryable: true,
+      recoveryScope: 'stage',
+      recommendedAction: 'Retry transcription and ensure the provider returns a BCP-47 language code.',
+    });
+  }
+
+  const counts = new Map();
+  for (const language of candidates) counts.set(language, (counts.get(language) ?? 0) + 1);
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  if (ranked.length > 1 && ranked[0][1] === ranked[1][1]) {
+    throw new ProviderError('Transcription detected conflicting source languages', {
+      code: ErrorCode.PROVIDER_ERROR,
+      retryable: true,
+      recoveryScope: 'stage',
+      details: { detections: ranked.map(([language, count]) => ({ language, count })) },
+      recommendedAction: 'Select the source language explicitly, then retry transcription.',
+    });
+  }
+  return ranked[0][0];
 }
 
 export function buildWindows(durationSeconds, windowSeconds, overlapSeconds) {

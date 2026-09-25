@@ -1,3 +1,5 @@
+import { AUTO_DETECT_LANGUAGE } from './languages.js';
+
 /**
  * Canonical job schema, state machine, and factory helpers. The job record is
  * the single source of truth for resumability: every stage writes its status and
@@ -204,8 +206,13 @@ export function createJobRecord(options) {
     languages: {
       source: sourceLanguage,
       target: targetLanguage,
+      // `source` remains the requested value (including `auto`) so the UI can
+      // show what the user selected. For auto mode this is filled with the
+      // provider's detected BCP-47 code during transcription.
+      detectedSource: null,
     },
     settings: {
+      autoDetectSourceLanguage: sourceLanguage === AUTO_DETECT_LANGUAGE,
       separateVocals: settings.separateVocals ?? false,
       ttsConcurrency: settings.ttsConcurrency ?? null,
       segmentConcurrency: settings.segmentConcurrency ?? null,

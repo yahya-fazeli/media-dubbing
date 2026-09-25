@@ -1,6 +1,7 @@
 import { GeminiClient } from './gemini-client.js';
 import { ProviderError, ErrorCode, ValidationError } from '../core/errors.js';
 import { assertLanguage, assertNonEmpty } from './provider.js';
+import { AUTO_DETECT_LANGUAGE, isLanguageCode } from '../core/languages.js';
 import { decodeWav, encodeWav, resample, toMono } from '../core/wav.js';
 
 /**
@@ -27,13 +28,16 @@ export class GeminiProvider {
    * are handled by the pipeline transcribing windows and stitching results.
    */
   async transcribe(audioBase64, options = {}) {
-    const { mimeType = 'audio/wav', language, durationSeconds, signal, stage } = options;
+    const { mimeType = 'audio/wav', language = 'en', durationSeconds, signal, stage } = options;
     if (!audioBase64) throw new ValidationError('transcribe requires audioBase64');
-    assertLanguage(language ?? 'en', 'language');
+    const autoDetect = language === AUTO_DETECT_LANGUAGE;
+    assertLanguage(language, 'language', { allowAuto: true });
 
     const prompt = [
       'Transcribe the attached audio verbatim.',
-      `The spoken language is "${language}".`,
+      autoDetect
+        ? 'Detect the spoken language automatically and return its BCP-47 language code.'
+        : `The spoken language is "${language}".`,
       'Return strict JSON with this exact shape:',
       '{"language":"<bcp47>","words":[{"text":"<word>","start":<seconds>,"end":<seconds>}],"text":"<full transcript>"}',
       'Rules: timestamps are seconds from the start of the audio and must be monotonic.',
@@ -191,8 +195,23 @@ export class GeminiProvider {
       });
     }
 
+    const reportedLanguage = typeof parsed.language === 'string' ? parsed.language.trim() : '';
+    // An explicit source selection is authoritative. Gemini may omit the field
+    // or return a human-readable label for an otherwise valid transcription;
+    // only auto mode must rely on the provider's reported code.
+    const detectedLanguage = language === AUTO_DETECT_LANGUAGE ? reportedLanguage : language;
+    if (!isLanguageCode(detectedLanguage)) {
+      throw new ProviderError('Transcription did not return a valid language code', {
+        code: ErrorCode.PROVIDER_ERROR,
+        retryable: true,
+        recoveryScope: 'stage',
+        details: { language: detectedLanguage || null },
+        recommendedAction: 'Retry transcription and ensure the provider returns a BCP-47 language code.',
+      });
+    }
+
     return {
-      language: String(parsed.language ?? language ?? 'en'),
+      language: detectedLanguage,
       text: String(parsed.text ?? words.map((w) => w.text).join(' ')),
       words,
       durationSeconds: durationSeconds ?? (words.at(-1)?.end ?? 0),

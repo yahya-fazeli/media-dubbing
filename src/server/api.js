@@ -3,7 +3,8 @@ import multer from 'multer';
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import fs from 'node:fs';
-import { SUPPORTED_LANGUAGES } from '../config.js';
+import { AUTO_DETECT_LANGUAGE, SUPPORTED_LANGUAGES } from '../config.js';
+import { isLanguageCode } from '../core/languages.js';
 import { ValidationError, NotFoundError } from '../core/errors.js';
 import { ingestUpload, cleanupStaging } from '../media/ingest.js';
 import { safeFilename, extensionOf } from '../core/fsutil.js';
@@ -51,6 +52,10 @@ export function createApiRouter(app, { uploadDir }) {
       name: 'youtube-dub',
       version: '3.0.0',
       languages: SUPPORTED_LANGUAGES,
+      sourceLanguageOptions: [
+        { code: AUTO_DETECT_LANGUAGE, name: 'Auto-detect' },
+        ...SUPPORTED_LANGUAGES,
+      ],
       limits: {
         maxUploadBytes: config.server.maxUploadBytes,
         maxDurationSeconds: config.media.maxDurationSeconds,
@@ -111,7 +116,7 @@ export function createApiRouter(app, { uploadDir }) {
       }
 
       const body = req.body ?? {};
-      const sourceLanguage = requireLanguage(body.sourceLanguage, 'sourceLanguage');
+      const sourceLanguage = requireLanguage(body.sourceLanguage, 'sourceLanguage', { allowAuto: true });
       const targetLanguage = requireLanguage(body.targetLanguage, 'targetLanguage');
       if (sourceLanguage === targetLanguage) {
         throw new ValidationError('Source and target language must differ');
@@ -161,7 +166,7 @@ export function createApiRouter(app, { uploadDir }) {
       const stat = await fsp.stat(sourcePath).catch(() => null);
       if (!stat?.isFile()) throw new ValidationError('sourcePath does not point to a readable file');
 
-      const sourceLanguage = requireLanguage(body.sourceLanguage, 'sourceLanguage');
+      const sourceLanguage = requireLanguage(body.sourceLanguage, 'sourceLanguage', { allowAuto: true });
       const targetLanguage = requireLanguage(body.targetLanguage, 'targetLanguage');
       const settings = parseSettings(body);
 
@@ -443,12 +448,13 @@ async function stageUpload(config, uploaded) {
   };
 }
 
-function requireLanguage(value, label) {
+function requireLanguage(value, label, { allowAuto = false } = {}) {
   if (typeof value !== 'string' || !value.trim()) {
     throw new ValidationError(`${label} is required`);
   }
   const code = value.trim();
-  if (!/^[a-z]{2}(-[A-Za-z]{2,4})?$/.test(code)) {
+  const valid = isLanguageCode(code) || (allowAuto && code === AUTO_DETECT_LANGUAGE);
+  if (!valid) {
     throw new ValidationError(`${label} must be a BCP-47 style code such as "en" or "pt-BR"`);
   }
   return code;

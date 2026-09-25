@@ -99,14 +99,20 @@ function renderBadges() {
 
 function populateLanguages() {
   const languages = STATE.meta?.languages ?? [];
-  const options = languages.map((lang) => el('option', { value: lang.code, text: `${lang.name} (${lang.code})` }));
+  const sourceOptions = STATE.meta?.sourceLanguageOptions ?? [
+    { code: 'auto', name: 'Auto-detect' },
+    ...languages,
+  ];
+  const sourceElements = sourceOptions.map((lang) => el('option', {
+    value: lang.code,
+    text: lang.code === 'auto' ? lang.name : `${lang.name} (${lang.code})`,
+  }));
+  const targetElements = languages.map((lang) => el('option', { value: lang.code, text: `${lang.name} (${lang.code})` }));
   clear(dom.njSource);
   clear(dom.njTarget);
-  for (const option of options) {
-    dom.njSource.append(option.cloneNode(true));
-    dom.njTarget.append(option.cloneNode(true));
-  }
-  dom.njSource.value = 'en';
+  for (const option of sourceElements) dom.njSource.append(option);
+  for (const option of targetElements) dom.njTarget.append(option);
+  dom.njSource.value = 'auto';
   dom.njTarget.value = 'es';
 }
 
@@ -223,6 +229,12 @@ function renderJobList() {
   dom.jobList.append(fragment);
 }
 
+function sourceLanguageLabel(job) {
+  const requested = job.languages?.source ?? '—';
+  const detected = job.languages?.detectedSource;
+  return requested === 'auto' && detected ? `auto (${detected})` : requested;
+}
+
 function jobListItem(job) {
   const summary = job.segmentSummary ?? {};
   const progress = percent(summary.mixed ?? 0, summary.total ?? 0);
@@ -236,7 +248,7 @@ function jobListItem(job) {
       el('span', { class: `pill ${statusClass(job.status)}`, text: job.status }),
     ]),
     el('div', { class: 'job-meta' }, [
-      el('span', { text: `${job.languages.source} → ${job.languages.target}` }),
+      el('span', { text: `${sourceLanguageLabel(job)} → ${job.languages.target}` }),
       el('span', { text: truncate(job.source.originalName, 24) }),
       el('span', { text: `${summary.total ?? 0} seg` }),
     ]),
@@ -294,7 +306,7 @@ function renderDetail() {
 
   dom.detailTitle.textContent = job.jobId;
   dom.detailSub.textContent =
-    `${job.source.originalName} · ${job.languages.source} → ${job.languages.target}`
+    `${job.source.originalName} · ${sourceLanguageLabel(job)} → ${job.languages.target}`
     + ` · created ${formatDateTime(job.createdAt)}`;
 
   clear(dom.detailStatus);

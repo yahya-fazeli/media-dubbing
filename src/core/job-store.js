@@ -5,6 +5,7 @@ import {
   writeJsonAtomic, readJson, ensureDir, resolveWithin, pathExists, statSafe, removeQuietly,
 } from './fsutil.js';
 import { assertSafeId } from './ids.js';
+import { AUTO_DETECT_LANGUAGE } from './languages.js';
 
 /**
  * Durable job storage. Each job is a directory containing `job.json` plus an
@@ -199,6 +200,10 @@ export function migrate(raw) {
   record.logs ??= [];
   record.artifacts ??= {};
   record.resume ??= { lastCompletedStage: null, nextStage: null, resumeCount: 0 };
+  record.languages ??= {};
+  record.languages.detectedSource ??= null;
+  record.settings ??= {};
+  record.settings.autoDetectSourceLanguage ??= record.languages.source === AUTO_DETECT_LANGUAGE;
   record.metrics ??= {};
   record.segmentSummary ??= {};
   record.schemaVersion ??= 1;

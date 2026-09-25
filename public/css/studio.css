@@ -113,7 +113,7 @@ h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: v
 }
 .panel-head-sub { border-top: none; padding-top: 0; }
 
-.panel-detail { overflow-y: auto; }
+.panel-detail { overflow-y: auto; min-width: 0; }
 
 /* Buttons and inputs */
 .btn {
@@ -244,7 +244,7 @@ h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: v
 .tab:hover { color: var(--text); }
 .tab.is-active { color: var(--accent); border-bottom-color: var(--accent); }
 .tab-panels { padding: 16px; }
-.tab-panel { display: none; }
+.tab-panel { display: none; min-width: 0; }
 .tab-panel.is-active { display: block; }
 
 /* Pipeline */
@@ -370,6 +370,21 @@ audio { width: 100%; margin-top: 8px; }
   background: var(--bg-panel-2);
 }
 .artifact-card h3 { margin-top: 0; }
+.artifact-card,
+.artifact-video { min-width: 0; }
+.artifact-video {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: 60vh;
+  max-height: min(420px, 60vh);
+  margin: 0 auto;
+  object-fit: contain;
+  background: #000;
+  border-radius: 6px;
+}
+.artifact-card audio { max-width: 100%; }
 .artifact-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 
 /* Logs */

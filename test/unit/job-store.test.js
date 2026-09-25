@@ -255,7 +255,12 @@ test('migrate backfills collections on a sparse record and bumps the schema', ()
   assert.deepEqual(migrated.stageHistory, []);
   assert.deepEqual(migrated.artifacts, {});
   assert.deepEqual(migrated.resume, { lastCompletedStage: null, nextStage: null, resumeCount: 0 });
+  assert.equal(migrated.languages.detectedSource, null);
+  assert.equal(migrated.settings.autoDetectSourceLanguage, false);
   assert.equal(migrated.schemaVersion, 3);
+
+  const auto = migrate({ jobId: 'job_auto', languages: { source: 'auto' } });
+  assert.equal(auto.settings.autoDetectSourceLanguage, true);
 });
 
 test('migrate preserves existing data and rejects non-objects', () => {

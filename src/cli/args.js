@@ -92,7 +92,7 @@ export function helpText() {
     '  doctor                        Check environment and configuration',
     '',
     'Common options:',
-    '  --from <lang>                 Source language (default: en)',
+    '  --from <lang|auto>            Source language (default: en; use auto to detect)',
     '  --to <lang>                   Target language (required for create)',
     '  --voice <a,b>                 Voice names for TTS',
     '  --separate-vocals             Enable vocal separation (requires Demucs)',

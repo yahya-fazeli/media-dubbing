@@ -432,10 +432,10 @@ export function renderOutput(container, job) {
     container.append(el('div', { class: 'artifact-card' }, [
       el('h3', { text: 'Final dubbed video' }),
       el('video', {
+        class: 'artifact-video',
         controls: 'controls',
         preload: 'metadata',
         src: `/api/jobs/${encodeURIComponent(job.jobId)}/artifacts/${artifacts.finalVideo}`,
-        style: 'width:100%;max-height:420px;background:#000;border-radius:6px',
       }),
       el('div', { class: 'artifact-actions' }, [
         el('a', {
