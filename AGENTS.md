@@ -22,8 +22,9 @@ concurrency, cancellation, ids/fsutil, errors, job-model, wav, alignment,
 providers/retry/key-pool/fake-provider, context, artifact-store, job-store,
 ingest, logger, metrics, middleware, config, telemetry, provider/media
 selection, the CLI parsers/formatters, the media tool runner (`command.js`),
-and the Gemini client. Integration tests (`test/integration/`) drive the real
-pipeline and HTTP API end to end against the mock engine and fake provider.
+the Gemini client and provider, segmentation, voice assignment, and alignment.
+Integration tests (`test/integration/`) drive the real pipeline and HTTP API end
+to end against the mock engine and fake provider.
 
 `command.js` tests spawn real `node` child processes (`process.execPath`) to
 exercise spawn, exit codes, signals, and timeouts without needing ffmpeg, and
