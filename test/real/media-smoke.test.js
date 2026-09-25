@@ -276,3 +276,39 @@ test('full pipeline preserves source video through a real render', { skip: !ENAB
   await app.orchestrator.shutdown().catch(() => {});
   await fsp.rm(appDir, { recursive: true, force: true });
 });
+
+test('loudness normalization runs through real ffmpeg in the mixing stage', { skip: !ENABLED }, async () => {
+  const appDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dub-real-loud-'));
+  const app = await createApplication({
+    config: { dataDir: appDir, media: { engine: 'ffmpeg' }, providers: { fake: { enabled: true, latencyMs: 0 } } },
+    logger: silentLogger,
+  });
+
+  const job = await app.orchestrator.createJob({
+    sourceName: 'clip.wav',
+    sourceBuffer: sineWav({ seconds: 6 }),
+    sourceLanguage: 'en',
+    targetLanguage: 'es',
+    settings: { normalizeLoudness: true },
+  });
+  await app.orchestrator.startJob(job.jobId);
+  const done = await app.orchestrator.waitFor(job.jobId, { timeoutMs: 180000 });
+
+  assert.equal(done.status, 'completed', `job failed: ${JSON.stringify(done.stages)}`);
+  assert.equal(done.stages.mixing.metadata.normalized.relative, 'audio/dubbed-normalized.wav');
+  assert.equal(done.artifacts.dubbedAudio, 'audio/dubbed-normalized.wav');
+
+  // The normalized track must be real, decodable PCM at the expected duration.
+  const normalizedPath = app.artifacts.resolve(job.jobId, done.artifacts.dubbedAudio);
+  const decoded = decodeWav(await fsp.readFile(normalizedPath));
+  assert.equal(decoded.channels, 2);
+  assert.ok(decoded.samples.length > 0);
+  assert.ok(
+    Math.abs(decoded.durationSeconds - done.stages.mixing.metadata.durationSeconds) < 0.5,
+    `duration shifted to ${decoded.durationSeconds}`,
+  );
+
+  await app.orchestrator.shutdown().catch(() => {});
+  await fsp.rm(appDir, { recursive: true, force: true });
+});
+

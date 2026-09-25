@@ -428,6 +428,41 @@ export const mixingStage = {
       }
       job.artifacts.dubbedAudio = relative;
 
+      // Optional loudness normalization on the finished mix. Runs through the
+      // engine (ffmpeg loudnorm, or the mock's RMS gain) so the pure-JS mixer and
+      // the ffmpeg path converge on comparable output levels.
+      let normalized = null;
+      if (job.settings.normalizeLoudness ?? pipeline.normalizeLoudness) {
+        const normalizedRelative = ctx.artifacts.relativePath('audio', 'dubbed-normalized.wav');
+        const normalizedPath = ctx.artifacts.resolve(ctx.jobId, normalizedRelative);
+        try {
+          const result = await ctx.engine.normalizeAudio(
+            ctx.artifacts.resolve(ctx.jobId, relative),
+            normalizedPath,
+            {
+              targetLufs: job.settings.targetLufs ?? pipeline.targetLufs,
+              sampleRate,
+              channels,
+              signal: ctx.signal,
+              stage: StageName.MIXING,
+            },
+          );
+          const check = await ctx.artifacts.verify(ctx.jobId, normalizedRelative, { expectWav: true });
+          if (!check.valid) throw new MediaError('Normalized audio failed validation', { code: ErrorCode.CORRUPT_ARTIFACT });
+          job.artifacts.dubbedAudio = normalizedRelative;
+          normalized = {
+            relative: normalizedRelative,
+            targetLufs: job.settings.targetLufs ?? pipeline.targetLufs,
+            appliedGain: result?.appliedGain ?? null,
+          };
+          log.info('Loudness normalized', { relative: normalizedRelative });
+        } catch (err) {
+          // Normalization is a refinement; a failure leaves the validated mix in
+          // place rather than failing an otherwise complete dub.
+          log.warn('Loudness normalization failed; keeping the un-normalized mix', { error: err.message });
+        }
+      }
+
       const failed = job.segments.filter((s) => s.status === SegmentStatus.FAILED).length;
       const metadata = {
         durationSeconds: round(duration, 3),
@@ -435,6 +470,7 @@ export const mixingStage = {
         skipped,
         failed,
         background: backgroundUsed,
+        normalized,
         sampleRate,
         channels,
         sizeBytes: verification.sizeBytes,

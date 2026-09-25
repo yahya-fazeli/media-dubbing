@@ -214,6 +214,8 @@ export function createJobRecord(options) {
       keepSourceAudio: settings.keepSourceAudio ?? true,
       musicBedGainDb: settings.musicBedGainDb ?? null,
       reencodeVideo: settings.reencodeVideo ?? false,
+      normalizeLoudness: settings.normalizeLoudness ?? null,
+      targetLufs: settings.targetLufs ?? null,
     },
     stages: Object.fromEntries(PIPELINE_ORDER.map((name) => [name, createStageRecord(name)])),
     stageHistory: [],

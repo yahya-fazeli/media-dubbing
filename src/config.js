@@ -101,6 +101,11 @@ export function loadConfig(overrides = {}) {
       outputContainer: process.env.DUB_OUTPUT_CONTAINER ?? 'mp4',
       musicBedGainDb: envFloat('DUB_MUSIC_BED_GAIN_DB', -6),
       dialogueGainDb: envFloat('DUB_DIALOGUE_GAIN_DB', 0),
+      // Loudness normalization on the final mixed track. Both engines implement
+      // normalizeAudio; off by default so existing output is unchanged unless the
+      // job asks for EBU R128 levels.
+      normalizeLoudness: envBool('DUB_NORMALIZE_LOUDNESS', false),
+      targetLufs: envFloat('DUB_TARGET_LUFS', -16),
     },
 
     quality: {
