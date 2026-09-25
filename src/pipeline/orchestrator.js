@@ -542,10 +542,18 @@ export class JobOrchestrator {
     const active = this.#runners.get(jobId);
     if (!active) return this.#store.read(jobId, { fresh: true });
     if (timeoutMs > 0) {
-      await Promise.race([
-        active.runner,
-        new Promise((resolve) => setTimeout(resolve, timeoutMs)),
-      ]);
+      // The timer must be cleared when the job finishes first. Leaving it armed
+      // keeps the event loop alive for the full timeout, which hangs any process
+      // (CLI, server, test runner) that waits for a job to complete.
+      let timer;
+      try {
+        await Promise.race([
+          active.runner,
+          new Promise((resolve) => { timer = setTimeout(resolve, timeoutMs); }),
+        ]);
+      } finally {
+        clearTimeout(timer);
+      }
     } else {
       await active.runner;
     }

@@ -5,6 +5,22 @@ import { decodeWav } from '../../src/core/wav.js';
 import { JobStatus, StageName, StageStatus, SegmentStatus } from '../../src/core/job-model.js';
 import { makeTestApp, createFixtureJob, cleanupDir, sineWav } from '../helpers/fixtures.js';
 
+test('waitFor clears its timeout timer once the job settles', async (t) => {
+  const { app, dataDir } = await makeTestApp();
+  t.after(async () => { await app.close(); await cleanupDir(dataDir); });
+
+  const job = await createFixtureJob(app);
+  await app.orchestrator.startJob(job.jobId);
+
+  const before = process._getActiveHandles().length;
+  // A generous timeout: if the timer is not cleared it stays armed for the full
+  // duration and holds the event loop open long after the job has completed.
+  await app.orchestrator.waitFor(job.jobId, { timeoutMs: 600_000 });
+  const after = process._getActiveHandles().length;
+
+  assert.equal(after, before, 'waitFor must not leave its timeout armed');
+});
+
 async function runJob(app, jobId, { timeoutMs = 120_000 } = {}) {
   await app.orchestrator.startJob(jobId);
   await app.orchestrator.waitFor(jobId, { timeoutMs });

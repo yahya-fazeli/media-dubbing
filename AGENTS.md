@@ -102,6 +102,47 @@ and full pipeline runs for both audio-only and video sources.
 Two runtime probes from Phase 0 that are wired but unverified against real tools:
 - `demucs` is absent. The Python package installs but needs `torch` plus runtime
   model-weight downloads, so vocal separation cannot be exercised here.
-- `@opentelemetry/api` is installed but there is **no SDK/exporter**, so spans
-  go nowhere. `@opentelemetry/sdk-trace-node` and `sdk-trace-base` are available
-  on npm if tracing is to be completed.
+- ~~`@opentelemetry/api` is installed but there is **no SDK/exporter**~~ Resolved:
+  the SDK is now initialized (see below).
+
+## OpenTelemetry tracing
+
+`DUB_OTEL_ENABLED=1` initializes a real `NodeTracerProvider` in
+`src/core/telemetry-sdk.js`; without it, `Telemetry` stays a no-op and no SDK is
+loaded. The SDK packages are `optionalDependencies`, so a plain install may omit
+them — the initializer then logs a warning and leaves tracing off rather than
+failing startup.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `DUB_OTEL_ENABLED` | `false` | Master switch. Registers the provider. |
+| `DUB_OTEL_EXPORTER` | `console` | `console`, `memory` (retains spans for tests), or `none`. |
+| `DUB_OTEL_SAMPLE_RATIO` | `1` | Head sampling ratio. `<1` wraps a `TraceIdRatioBasedSampler`. |
+| `OTEL_SERVICE_NAME` | `youtube-dub` | `service.name` resource attribute. |
+
+Two non-obvious constraints, both learned the hard way:
+
+- **The tracer provider is process-global.** `provider.register()` installs it
+  once and cannot replace it: a second `register()` is silently ignored, and a
+  provider that has been shut down is never revived. `initTelemetrySdk`
+  therefore memoizes a single live SDK, and `app.close()` calls `flush()` —
+  **not** `shutdown()` — so a second app in the same process still traces.
+  `shutdown()` is reserved for true process exit and `resetTelemetrySdkForTests()`.
+- **A simple span processor is deliberate.** `BatchSpanProcessor` holds a
+  scheduled timer that keeps the event loop alive. Since the provider is never
+  shut down, that would prevent process exit. Don't switch to batching without
+  restoring a shutdown path.
+
+`test/unit/telemetry-sdk.test.js` asserts on the shared provider and runs
+exporter-selection cases in child processes, because only one provider can ever
+be live per process.
+
+## Event-loop hygiene
+
+`orchestrator.waitFor()` races the job runner against a `setTimeout`. That timer
+**must be cleared** once the job settles: leaving it armed keeps the event loop
+alive for the full `timeoutMs`, which hangs the CLI, the server, and the test
+runner for up to two minutes after a job finishes. `process._getActiveHandles()`
+is the regression signal. `telemetry-sdk.js` is subject to the same rule — no
+`setInterval`/long timers without a teardown path.
+
