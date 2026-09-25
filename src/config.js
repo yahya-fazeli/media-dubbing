@@ -145,6 +145,10 @@ export function loadConfig(overrides = {}) {
       logPretty: envBool('DUB_LOG_PRETTY', true),
       otelEnabled: envBool('DUB_OTEL_ENABLED', false),
       otelServiceName: process.env.OTEL_SERVICE_NAME ?? 'youtube-dub',
+      // 'console' prints spans to stdout, 'memory' retains them for tests and
+      // inspection, 'none' registers a provider with no exporter.
+      otelExporter: process.env.DUB_OTEL_EXPORTER ?? 'console',
+      otelSampleRatio: envFloat('DUB_OTEL_SAMPLE_RATIO', 1),
       metricsEnabled: envBool('DUB_METRICS_ENABLED', true),
     },
 

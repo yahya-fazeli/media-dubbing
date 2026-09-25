@@ -2,6 +2,7 @@ import { loadConfig, ensureDataDirs } from './config.js';
 import { createLogger } from './core/logger.js';
 import { createMetrics } from './core/metrics.js';
 import { createTelemetry } from './core/telemetry.js';
+import { initTelemetrySdk } from './core/telemetry-sdk.js';
 import { JobStore } from './core/job-store.js';
 import { ArtifactStore } from './core/artifact-store.js';
 import { JobOrchestrator } from './pipeline/orchestrator.js';
@@ -16,6 +17,13 @@ export async function createApplication(overrides = {}) {
   const config = ensureDataDirs(loadConfig(overrides.config ?? {}));
   const logger = overrides.logger ?? createLogger(config);
   const metrics = overrides.metrics ?? createMetrics(config);
+
+  // The provider must be registered before `createTelemetry` resolves a tracer,
+  // otherwise the API hands back a proxy that drops every span. Tests inject
+  // their own provider and skip this so they can assert on captured spans.
+  const telemetrySdk = overrides.telemetrySdk !== undefined
+    ? overrides.telemetrySdk
+    : initTelemetrySdk(config, { logger });
   const telemetry = overrides.telemetry ?? createTelemetry(config);
 
   const engineSelection = overrides.engine
@@ -52,6 +60,7 @@ export async function createApplication(overrides = {}) {
     logger,
     metrics,
     telemetry,
+    telemetrySdk,
     store,
     artifacts,
     orchestrator,
@@ -64,6 +73,11 @@ export async function createApplication(overrides = {}) {
 
     async close({ timeoutMs = 15000 } = {}) {
       await orchestrator.shutdown({ timeoutMs });
+      // Flush buffered spans so nothing is lost on exit. The provider itself is
+      // process-global and is deliberately left registered: shutting it down
+      // would silently disable tracing for any app created later in this
+      // process. At true process exit the runtime drains it.
+      await telemetrySdk?.flush();
     },
   };
 
