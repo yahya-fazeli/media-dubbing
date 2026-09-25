@@ -28,20 +28,21 @@ export function segmentWords(words, options = {}) {
     maxChars = 600,
   } = options;
 
-  const usable = (words ?? [])
-    .map((w) => ({
-      text: String(w.text ?? '').trim(),
-      start: Number(w.start),
-      end: Number(w.end),
-    }))
-    .filter((w) => w.text.length > 0 && Number.isFinite(w.start) && Number.isFinite(w.end))
-    .map((w, i, arr) => {
-      // Repair any residual non-monotonic timestamps so grouping cannot invert.
-      const prevEnd = i > 0 ? arr[i - 1].end : 0;
-      const start = Math.max(prevEnd, w.start);
-      const end = Math.max(start + 0.01, w.end);
-      return { text: w.text, start, end };
-    });
+  const usable = [];
+  let prevEnd = 0;
+  for (const raw of words ?? []) {
+    const text = String(raw?.text ?? '').trim();
+    const start = Number(raw?.start);
+    const end = Number(raw?.end);
+    if (!text.length || !Number.isFinite(start) || !Number.isFinite(end)) continue;
+    // Repair any residual non-monotonic timestamps so grouping cannot invert.
+    // The repaired end must be carried forward, otherwise an overlapping word
+    // keeps its original start and the sequence stays non-monotonic.
+    const fixedStart = Math.max(prevEnd, start);
+    const fixedEnd = Math.max(fixedStart + 0.01, end);
+    usable.push({ text, start: fixedStart, end: fixedEnd });
+    prevEnd = fixedEnd;
+  }
 
   if (!usable.length) return [];
 
