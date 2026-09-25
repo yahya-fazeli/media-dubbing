@@ -72,3 +72,36 @@ runtime proxy.
   (`#job-list-empty`); text extractors surface it even when it is not visible.
 - Media/HTML are written via `textContent`/element creation, never provider data
   through `innerHTML`.
+- **`CancelToken` must satisfy the `AbortSignal` interface.** The orchestrator
+  passes a `CancelToken` as the `signal` option to `runCommand`, `sleep()`, and
+  the Gemini client, all of which expect a standard `AbortSignal`. The token owns
+  an `AbortController` and delegates `addEventListener` / `removeEventListener` /
+  `aborted` to it. Before that, `runCommand` threw "signal.addEventListener is not
+  a function" on every real ffmpeg call, and the `signal?.addEventListener?.()`
+  call sites silently no-oped so cancellation never reached in-flight provider
+  requests. Any new field on the token must preserve this contract.
+
+## Testing the real runtime
+
+The default suite uses the **mock** media engine, which never spawns a
+subprocess — so `runCommand`, every ffmpeg argument list, and real stream
+handling are unexercised by `npm test`. `test/real/media-smoke.test.js` covers
+them against the installed ffmpeg binary and is skipped unless enabled:
+
+```
+npm run test:real:media        # RUN_REAL_MEDIA_TESTS=1, needs ffmpeg + ffprobe
+```
+
+It builds its own video fixtures with ffmpeg (no committed binary assets) and
+covers probe, extract, trim, normalize, concat, mix, render with stream copy,
+render with forced re-encode, subprocess cancellation, missing-binary errors,
+and full pipeline runs for both audio-only and video sources.
+
+`ffmpeg-static` is available on npm as a fallback when system ffmpeg is absent.
+
+Two runtime probes from Phase 0 that are wired but unverified against real tools:
+- `demucs` is absent. The Python package installs but needs `torch` plus runtime
+  model-weight downloads, so vocal separation cannot be exercised here.
+- `@opentelemetry/api` is installed but there is **no SDK/exporter**, so spans
+  go nowhere. `@opentelemetry/sdk-trace-node` and `sdk-trace-base` are available
+  on npm if tracing is to be completed.
